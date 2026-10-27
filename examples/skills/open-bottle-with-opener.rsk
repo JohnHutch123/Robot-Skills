@@ -1,0 +1,49 @@
+rs 0.1
+
+# Example skill for RS v0.1.
+# The motion weights below are placeholders ("..."). Real values come from
+# fitting the movement primitives to a demonstration.
+
+skill open-bottle-with-opener 1.0.0 {
+  title   "Open a capped bottle with a bottle opener"
+  class   RS 2.1.2                        # Changing quantity > Divide > Detach a part
+  tags    object:bottle object:crown-cap tool:bottle-opener
+          body:two-hands domain:kitchen material:glass risk:fragile
+
+  needs   ArmMotion x2, GripperMotion x2, Grasping, ForceSensing, Camera
+  limits  payload >= 1.0 kg, grip_force >= 40 N
+
+  objects {
+    bottle : Bottle       { has neck : Neck, cap : CrownCap }
+    opener : BottleOpener { has lip : Edge, handle : Handle }
+  }
+
+  pre     upright(bottle), capped(bottle), reachable(opener)
+  effect  not capped(bottle)
+  success not capped(bottle) and upright(bottle) within 30 s
+  abort   force > 80 N or not upright(bottle)
+
+  plan sequence {
+    use grasp-object >=1.0 (target: bottle.neck, hand: left)
+    use grasp-object >=1.0 (target: opener.handle, hand: right)
+    position opener.lip to bottle.cap.rim  motion: approach
+    retry 3 {
+      rotate opener about opener.lip by 25 deg  motion: lever  force <= 40 N
+      check not capped(bottle)
+    }
+    release opener
+  }
+
+  motion approach : dmp { frame bottle.cap  dims 6  basis 20  duration 1.5 s  weights @w_approach }
+  motion lever    : dmp { frame opener.lip  dims 6  basis 15  duration 0.8 s  weights @w_lever }
+
+  data w_approach : f16[120] = b64"..."   # 6 dims x 20 weights
+  data w_lever    : f16[90]  = b64"..."   # 6 dims x 15 weights
+
+  provenance {
+    author  "A. Contributor"  key ed25519:...
+    created 2026-10-27
+    origin  written
+    licence CC-BY-4.0
+  }
+}

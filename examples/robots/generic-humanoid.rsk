@@ -1,0 +1,12 @@
+rs 0.1
+
+# Example robot capability profile for RS v0.1.
+# Capability names follow RoboEarth's SRDL, simplified to plain names.
+
+robot generic-humanoid 1.0 {
+  body    urdf "generic-humanoid.urdf"     # existing body description, reused as is
+  has     BaseMotion, Walking, ArmMotion x2, GripperMotion x2, Grasping,
+          FingerMotion x2, ForceSensing, Camera, DepthCamera, Microphone, Speaker
+  limits  payload 3.0 kg, reach 0.7 m, grip_force 60 N
+  actions all                              # implements every VDI 2860 verb
+}

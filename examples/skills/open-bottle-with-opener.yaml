@@ -1,0 +1,48 @@
+# The same skill as open-bottle-with-opener.rsk, in the YAML form.
+# Motion weights are placeholders ("...").
+
+rs: "0.1"
+skill: open-bottle-with-opener
+version: 1.0.0
+title: Open a capped bottle with a bottle opener
+class: RS 2.1.2
+tags: [object:bottle, object:crown-cap, tool:bottle-opener, body:two-hands,
+       domain:kitchen, material:glass, risk:fragile]
+
+needs: [ArmMotion x2, GripperMotion x2, Grasping, ForceSensing, Camera]
+limits: {payload: ">= 1.0 kg", grip_force: ">= 40 N"}
+
+objects:
+  bottle: {type: Bottle, parts: {neck: Neck, cap: CrownCap}}
+  opener: {type: BottleOpener, parts: {lip: Edge, handle: Handle}}
+
+pre: [upright(bottle), capped(bottle), reachable(opener)]
+effect: [not capped(bottle)]
+success: {when: "not capped(bottle) and upright(bottle)", within: 30 s}
+abort: "force > 80 N or not upright(bottle)"
+
+plan:
+  sequence:
+    - use: {skill: grasp-object, version: ">=1.0", target: bottle.neck, hand: left}
+    - use: {skill: grasp-object, version: ">=1.0", target: opener.handle, hand: right}
+    - position: {what: opener.lip, to: bottle.cap.rim, motion: approach}
+    - retry:
+        times: 3
+        do:
+          - rotate: {what: opener, about: opener.lip, by: 25 deg, motion: lever, force: "<= 40 N"}
+          - check: not capped(bottle)
+    - release: {what: opener}
+
+motions:
+  approach: {kind: dmp, frame: bottle.cap, dims: 6, basis: 20, duration: 1.5 s, weights: "@w_approach"}
+  lever:    {kind: dmp, frame: opener.lip, dims: 6, basis: 15, duration: 0.8 s, weights: "@w_lever"}
+
+data:
+  w_approach: {type: f16, count: 120, b64: "..."}
+  w_lever:    {type: f16, count: 90,  b64: "..."}
+
+provenance:
+  author: {name: A. Contributor, key: "ed25519:..."}
+  created: 2026-10-27
+  origin: written
+  licence: CC-BY-4.0
