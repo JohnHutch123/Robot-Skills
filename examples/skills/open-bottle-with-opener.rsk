@@ -5,6 +5,7 @@ rs 0.1
 # fitting the movement primitives to a demonstration.
 
 skill open-bottle-with-opener 1.0.0 {
+  id      0192f3a4-7c1e-7b2a-9d4e-5a1f6c3b8e20   # global ID (UUID v7), same for all versions
   title   "Open a capped bottle with a bottle opener"
   class   RS 2.1.2                        # Changing quantity > Divide > Detach a part
   tags    object:bottle object:crown-cap tool:bottle-opener
