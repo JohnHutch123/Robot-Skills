@@ -21,6 +21,7 @@ A skill should be something you can hand from one robot to another, like a recip
 rs 0.1
 
 skill open-bottle-with-opener 1.0.0 {
+  id      0192f3a4-7c1e-7b2a-9d4e-5a1f6c3b8e20   # global ID (UUID v7), same for all versions
   title   "Open a capped bottle with a bottle opener"
   class   RS 2.1.2                        # Changing quantity > Divide > Detach a part
   tags    object:bottle tool:bottle-opener body:two-hands domain:kitchen
@@ -54,6 +55,8 @@ The full example is in [`examples/skills/`](examples/skills/).
 | [`docs/prior-art.md`](docs/prior-art.md) | Survey of existing systems and storage options, and why RS is designed this way |
 | [`examples/skills/`](examples/skills/) | Example skills in RS text and YAML form |
 | [`examples/robots/`](examples/robots/) | Example robot capability profiles |
+| [`docs/library-database.md`](docs/library-database.md) | Design of the open skill library: global IDs, fast lookup, ratings, usage and comments |
+| [`library/`](library/) | SQL schema, example queries and sample data for the library (PostgreSQL) |
 
 ## Key design choices (v0.1)
 
@@ -62,6 +65,8 @@ The full example is in [`examples/skills/`](examples/skills/).
 - **Action words:** based on the handling functions of VDI 2860 (storing, changing quantity, moving, securing, checking), plus a few RS additions.
 - **Robot capabilities:** based on RoboEarth's Semantic Robot Description Language (SRDL).
 - **Classification:** open-ended `RS` class codes (like a library catalogue) plus searchable tags.
+- **Global IDs:** every skill has a UUID v7 that travels with it; every published version also has a content hash.
+- **Open library:** a relational database ranks skills by measured success rate, how many robots use them, and ratings, with comments on each version.
 
 ## Roadmap
 
