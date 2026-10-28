@@ -107,7 +107,8 @@ skill       = "skill" name semver "{" { section } "}" ;
 section     = title | class | tags | needs | limits | objects | pre | effect
             | success | abort | plan | motion | model | data | provenance | ext ;
 plan        = "plan" node ;
-node        = control "{" { node } "}" | action | use | check ;
+node        = control "{" { node } "}" | select | action | use | check ;
+select      = "select" "{" { "when" condition ":" node } [ "else" ":" node ] "}" ;
 control     = "sequence" | "fallback" | "parallel" | "retry" count | "repeat" count ;
 action      = verb ref [ "to" ref | "about" ref ] [ "by" quantity ] { option } ;
 use         = "use" name [ range ] "(" [ arg { "," arg } ] ")" ;
@@ -146,12 +147,44 @@ The plan is a tree: control nodes decide order, and leaves are actions, checks o
 | Node | Behaviour |
 | --- | --- |
 | `sequence { }` | Run children in order; fail as soon as one fails |
+| `select { when ...: ... else: ... }` | Check each `when` condition in order and run only the first branch whose condition holds now; run `else` if none does; fail if there is no `else` |
 | `fallback { }` | Try children in order; succeed as soon as one succeeds (for alternatives, such as "use the opener, else use a spoon") |
 | `parallel { }` | Run children at the same time, such as two hands; succeed when all succeed |
 | `retry N { }` | Re-run the block up to N times until it succeeds |
 | `repeat N { }` | Run the block exactly N times |
 | `use <skill> <range> (args)` | Run another skill; its success and effects count as this step's |
 | `check <condition>` | Succeed if the condition holds now |
+
+### Choosing between skills: `select` versus `fallback`
+
+Use `select` when the robot can tell **before acting** which way to go, for example from the type of cap it sees. Use `fallback` only when the right choice can be found out by trying, and a failed attempt is harmless. With physical objects a failed try can spill or break things, so `select` is preferred.
+
+A common pattern is a thin "chooser" skill that looks at an object and calls the specific skill for it. Specific skills are split by **mechanism**, not by container: unscrewing a bottle cap and a jar lid is one skill with different size and torque, while a crown cap, a ring-pull and a can opener are separate skills.
+
+```text
+skill open-container 1.0.0 {
+  id      0192f3a5-0a10-7c44-8b1e-2f7d9e6a4c01
+  title   "Open a closed container"
+  class   RS 2.1.2
+  objects { box : Container { has closure : Closure } }
+  pre     closed(box)
+  effect  open(box)
+  success open(box) within 60 s
+
+  plan sequence {
+    inspect box.closure
+    select {
+      when is(box.closure, CrownCap): use open-crown-cap >=1.0 (target: box)
+      when is(box.closure, ScrewCap): use unscrew-cap    >=1.0 (target: box)
+      when is(box.closure, RingPull): use pull-ring-tab  >=1.0 (target: box)
+      when is(box.closure, CanLid):   use open-tin-can   >=1.0 (target: box)
+      else: say "I don't know how to open this container"
+    }
+  }
+}
+```
+
+`is(<object>, <Type>)` is true when the object is of that type or a subtype of it. Object types form a tree (for example `Closure` has subtypes `CrownCap`, `ScrewCap`, `RingPull` and `CanLid`), so skills can be written for a general type and still match specific ones.
 
 ### Action words (from VDI 2860)
 
@@ -339,7 +372,7 @@ The YAML form is checked against a JSON Schema published with the spec, so ordin
 
 ## Open questions for v0.2
 
-- [ ] **Predicates:** agree the starter list (`upright`, `capped`, `reachable`, `holding`, `open`, `on`, `in`, ...) and how a robot proves each one, usually by camera.
+- [ ] **Predicates:** agree the starter list (`is`, `upright`, `capped`, `reachable`, `holding`, `open`, `closed`, `on`, `in`, ...) and how a robot proves each one, usually by camera.
 - [ ] **Object types:** reuse an existing object vocabulary or keep our own short list? Types need named parts (`cap`, `handle`) with standard frames.
 - [ ] **Simulator tests:** a standard test-scene format so the library's re-test is repeatable. MuJoCo scene files are the likely base.
 - [ ] **Body adapter interface:** the exact calls a robot must provide for each VDI 2860 verb. This becomes the porting guide for robot makers.

@@ -1,0 +1,41 @@
+rs 0.1
+
+# Example "chooser" skill for RS v0.1.
+# It looks at the closure and calls the specific skill for that mechanism.
+# The called skills (open-crown-cap, unscrew-cap, pull-ring-tab, open-tin-can)
+# are separate skills, each tested and rated on its own.
+
+skill open-container 1.0.0 {
+  id      0192f3a5-0a10-7c44-8b1e-2f7d9e6a4c01   # global ID (UUID v7), same for all versions
+  title   "Open a closed container"
+  class   RS 2.1.2                               # Changing quantity > Divide > Detach a part
+  tags    object:bottle object:jar object:tin-can domain:kitchen
+
+  needs   ArmMotion, Grasping, Camera
+
+  objects {
+    box : Container { has closure : Closure }
+  }
+
+  pre     closed(box), reachable(box)
+  effect  open(box)
+  success open(box) within 60 s
+
+  plan sequence {
+    inspect box.closure
+    select {
+      when is(box.closure, CrownCap): use open-crown-cap >=1.0 (target: box)
+      when is(box.closure, ScrewCap): use unscrew-cap    >=1.0 (target: box)   # bottles and jars
+      when is(box.closure, RingPull): use pull-ring-tab  >=1.0 (target: box)
+      when is(box.closure, CanLid):   use open-tin-can   >=1.0 (target: box)
+      else: say "I don't know how to open this container"
+    }
+  }
+
+  provenance {
+    author  "A. Contributor"  key ed25519:...
+    created 2026-10-28
+    origin  written
+    licence CC-BY-4.0
+  }
+}
