@@ -6,8 +6,8 @@
 --   skill_id    UUID, stable for one line of versions of a skill (written in the skill file as `id`)
 --   version_id  UUID, one per published version (assigned by the library)
 --   sha256      hash of the signed packet bytes; the true identity of the content
--- All UUIDs are version 7 (RFC 9562): globally unique and time-ordered, so new
--- rows land at the end of indexes and inserts stay fast.
+-- Generated UUIDs are version 7 (RFC 9562), with a millisecond timestamp prefix.
+-- Random suffixes do not guarantee insertion order within a millisecond.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- gen_random_uuid(), digest()
 
@@ -46,7 +46,8 @@ CREATE TABLE robot (
   owner_author_id uuid REFERENCES author,
   public_key      bytea NOT NULL UNIQUE,
   region          char(2),                              -- country code only, never an address
-  registered_at   timestamptz NOT NULL DEFAULT now()
+  registered_at   timestamptz NOT NULL DEFAULT now(),
+  CHECK (octet_length(public_key) = 32)
 );
 
 -- ---------------------------------------------------------------- vocabularies
@@ -95,9 +96,9 @@ CREATE TABLE skill_version (
   version_id       uuid PRIMARY KEY DEFAULT rs_uuid7(),
   skill_id         uuid NOT NULL REFERENCES skill,
   semver           text NOT NULL,
-  v_major          integer NOT NULL,
-  v_minor          integer NOT NULL,
-  v_patch          integer NOT NULL,
+  v_major          integer NOT NULL CHECK (v_major >= 0),
+  v_minor          integer NOT NULL CHECK (v_minor >= 0),
+  v_patch          integer NOT NULL CHECK (v_patch >= 0),
   sha256           bytea NOT NULL UNIQUE CHECK (octet_length(sha256) = 32),
   packet           bytea NOT NULL,                      -- the signed .rsp packet, usually 2-16 KB
   licence          text NOT NULL DEFAULT 'CC-BY-4.0' CHECK (licence IN ('CC-BY-4.0','CC0-1.0')),
@@ -106,7 +107,8 @@ CREATE TABLE skill_version (
                      CHECK (status IN ('submitted','testing','listed','rejected','withdrawn')),
   published_at     timestamptz NOT NULL DEFAULT now(),
   library_signed_at timestamptz,
-  UNIQUE (skill_id, v_major, v_minor, v_patch)
+  UNIQUE (skill_id, v_major, v_minor, v_patch),
+  CHECK (sha256 = digest(packet, 'sha256'))
 );
 CREATE INDEX skill_version_listed_idx ON skill_version (skill_id, v_major DESC, v_minor DESC, v_patch DESC)
   WHERE status = 'listed';
@@ -141,7 +143,7 @@ CREATE INDEX skill_version_use_rev_idx ON skill_version_use (uses_skill_id);
 CREATE TABLE robot_model_capability (
   robot_model_id uuid NOT NULL REFERENCES robot_model ON DELETE CASCADE,
   capability     text NOT NULL REFERENCES capability,
-  count          smallint NOT NULL DEFAULT 1,
+  count          smallint NOT NULL DEFAULT 1 CHECK (count > 0),
   PRIMARY KEY (robot_model_id, capability)
 );
 
@@ -201,11 +203,14 @@ CREATE TABLE comment (
   comment_id        uuid PRIMARY KEY DEFAULT rs_uuid7(),
   version_id        uuid NOT NULL REFERENCES skill_version ON DELETE CASCADE,
   author_id         uuid NOT NULL REFERENCES author,
-  parent_comment_id uuid REFERENCES comment,            -- replies form threads
+  parent_comment_id uuid,                               -- replies stay on the same version
   body              text NOT NULL CHECK (length(body) BETWEEN 1 AND 10000),
   status            text NOT NULL DEFAULT 'visible' CHECK (status IN ('visible','hidden','deleted')),
   created_at        timestamptz NOT NULL DEFAULT now(),
-  edited_at         timestamptz
+  edited_at         timestamptz,
+  UNIQUE (version_id, comment_id),
+  FOREIGN KEY (version_id, parent_comment_id) REFERENCES comment (version_id, comment_id),
+  CHECK (parent_comment_id <> comment_id)
 );
 CREATE INDEX comment_version_idx ON comment (version_id, created_at);
 
@@ -260,4 +265,6 @@ SELECT s.*,
      + 0.3 * least(1.0, ln(1 + s.active_robots_30d) / ln(1001))   -- 1000 active robots = full marks
      + 0.2 * (s.rating_score - 1) / 4                              -- stars mapped to 0..1
        AS rank_score
-FROM skill_version_stats s;
+FROM skill_version_stats s
+JOIN skill_version v ON v.version_id = s.version_id
+WHERE v.status = 'listed';

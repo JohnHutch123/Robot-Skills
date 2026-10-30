@@ -1,4 +1,5 @@
--- Typical library queries for library/schema.sql. Each one is served by an index.
+-- Typical library queries for library/schema.sql. Indexes support the lookups;
+-- ranking, recursive traversal and sorting still depend on the result size.
 -- Parameters are written as :name (psql variables).
 
 -- 1. Fetch a skill by its global ID, with its newest listed version.
@@ -28,7 +29,9 @@ WHERE (s.class_code = '2' OR s.class_code LIKE '2.%')
 ORDER BY r.rank_score DESC
 LIMIT 20;
 
--- 4. Listed versions a given robot model can run: every need is met by its capabilities.
+-- 4. Capability candidates: every explicitly listed need is met by the profile.
+-- This does not check physical limits, available actions, inferred capabilities,
+-- nested dependencies, preconditions or the current scene; it is not permission to run.
 SELECT s.name, v.semver
 FROM skill_version v JOIN skill s USING (skill_id)
 WHERE v.status = 'listed'
@@ -50,10 +53,21 @@ WITH RECURSIVE family AS (
   JOIN skill_version pv ON pv.skill_id = f.skill_id
   JOIN skill c          ON c.parent_version_id = pv.version_id
 )
-SELECT depth, name, skill_id FROM family ORDER BY depth, name;
+CYCLE skill_id SET is_cycle USING family_path
+SELECT depth, name, skill_id FROM family WHERE NOT is_cycle ORDER BY depth, name;
 
 -- 6. Comments on a version, oldest first, with replies under their parent.
+-- A visible reply to a hidden/deleted parent starts a new displayed thread.
+WITH RECURSIVE visible AS (
+  SELECT * FROM comment WHERE version_id = :'version_id' AND status = 'visible'
+), thread AS (
+  SELECT c.* FROM visible c
+  WHERE c.parent_comment_id IS NULL
+     OR NOT EXISTS (SELECT 1 FROM visible p WHERE p.comment_id = c.parent_comment_id)
+  UNION ALL
+  SELECT c.* FROM thread p JOIN visible c ON c.parent_comment_id = p.comment_id
+)
+SEARCH DEPTH FIRST BY created_at, comment_id SET thread_order
 SELECT c.comment_id, c.parent_comment_id, a.display_name, c.created_at, c.body
-FROM comment c JOIN author a USING (author_id)
-WHERE c.version_id = :'version_id' AND c.status = 'visible'
-ORDER BY coalesce(c.parent_comment_id, c.comment_id), c.created_at;
+FROM thread c JOIN author a USING (author_id)
+ORDER BY thread_order;

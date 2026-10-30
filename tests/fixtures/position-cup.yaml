@@ -1,0 +1,32 @@
+# Synthetic validator fixture, not a measured motion or a signed robot skill.
+rs: "0.1"
+skill: position-cup
+version: 1.0.0
+id: 0192f3a4-7c1e-7b2a-9d4e-5a1f6c3b8e21
+title: Position a cup on a shelf
+class: RS 3.4
+tags: [object:cup, domain:kitchen]
+needs: [ArmMotion, GripperMotion, Camera]
+objects:
+  cup: {type: Cup, parts: {rim: Edge}}
+  shelf: {type: Surface}
+pre: [reachable(cup), reachable(shelf)]
+effect: ["on(cup, shelf)"]
+success: {when: "on(cup, shelf) and upright(cup)", within: 5 s}
+abort: force > 20 N
+plan:
+  sequence:
+    - position: {what: cup, to: shelf, motion: approach, force: "<= 10 N"}
+    - check: "on(cup, shelf)"
+motions:
+  approach: {kind: dmp, frame: shelf, dims: 6, basis: 1, duration: 1 s, weights: "@weights"}
+data:
+  weights: {type: f16, count: 6, values: [0, 0, 0, 0, 0, 0]}
+provenance:
+  author:
+    name: Validator fixture
+    key: ed25519:d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+  created: 2026-10-31
+  modified: 2026-10-31
+  origin: written
+  licence: CC-BY-4.0

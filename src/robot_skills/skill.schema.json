@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RS 0.1 authoring profile, revision 1 (not an execution standard)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rs", "skill", "version", "id", "title", "class", "needs", "objects", "pre", "effect", "success", "plan", "provenance"],
+  "properties": {
+    "rs": {"const": "0.1"},
+    "skill": {"$ref": "#/$defs/name"},
+    "version": {"$ref": "#/$defs/semver"},
+    "id": {"$ref": "#/$defs/uuid7"},
+    "title": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$(?![\\s\\S])"},
+    "class": {"type": "string", "pattern": "^RS [0-9]+(?:\\.[0-9]+)*$(?![\\s\\S])"},
+    "tags": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^(domain|object|tool|body|material|risk):[a-z0-9]+(?:-[a-z0-9]+)*$(?![\\s\\S])"}
+    },
+    "needs": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]*(?: x[1-9][0-9]*)?$(?![\\s\\S])"}
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "payload": {"type": "string"},
+        "reach": {"type": "string"},
+        "grip_force": {"type": "string"}
+      }
+    },
+    "objects": {
+      "type": "object", "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {"$ref": "#/$defs/object"}
+    },
+    "pre": {"$ref": "#/$defs/conditions"},
+    "effect": {"$ref": "#/$defs/conditions"},
+    "success": {
+      "type": "object", "required": ["when", "within"], "additionalProperties": false,
+      "properties": {"when": {"$ref": "#/$defs/condition"}, "within": {"type": "string"}}
+    },
+    "abort": {"$ref": "#/$defs/condition"},
+    "plan": {"$ref": "#/$defs/node"},
+    "motions": {
+      "type": "object", "propertyNames": {"$ref": "#/$defs/dataName"},
+      "additionalProperties": {"$ref": "#/$defs/motion"}
+    },
+    "data": {
+      "type": "object", "propertyNames": {"$ref": "#/$defs/dataName"},
+      "additionalProperties": {"$ref": "#/$defs/data"}
+    },
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "ext": {
+      "type": "object", "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {"type": "object"}
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])"},
+    "dataName": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$(?![\\s\\S])"},
+    "type": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$(?![\\s\\S])"},
+    "ref": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$(?![\\s\\S])"},
+    "uuid7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$(?![\\s\\S])"},
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$(?![\\s\\S])"
+    },
+    "condition": {"type": "string", "minLength": 1},
+    "conditions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/condition"}},
+    "object": {
+      "type": "object", "required": ["type"], "additionalProperties": false,
+      "properties": {
+        "type": {"$ref": "#/$defs/type"},
+        "parts": {
+          "type": "object", "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"oneOf": [{"$ref": "#/$defs/type"}, {"$ref": "#/$defs/object"}]}
+        }
+      }
+    },
+    "children": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/node"}},
+    "counted": {
+      "type": "object", "required": ["times", "do"], "additionalProperties": false,
+      "properties": {"times": {"type": "integer", "minimum": 1}, "do": {"$ref": "#/$defs/children"}}
+    },
+    "action": {
+      "type": "object", "required": ["what"], "additionalProperties": false,
+      "properties": {
+        "what": {"$ref": "#/$defs/ref"},
+        "to": {"$ref": "#/$defs/ref"},
+        "about": {"$ref": "#/$defs/ref"},
+        "in": {"$ref": "#/$defs/ref"},
+        "with": {"enum": ["left", "right"]},
+        "by": {"type": "string"},
+        "motion": {"$ref": "#/$defs/dataName"},
+        "force": {"type": "string"}
+      },
+      "not": {"required": ["to", "about"]}
+    },
+    "use": {
+      "type": "object", "required": ["skill", "version"], "additionalProperties": false,
+      "properties": {
+        "skill": {"$ref": "#/$defs/name"},
+        "id": {"$ref": "#/$defs/uuid7"},
+        "version": {"type": "string", "minLength": 1},
+        "target": {"$ref": "#/$defs/ref"},
+        "hand": {"enum": ["left", "right"]}
+      }
+    },
+    "select": {
+      "type": "object", "required": ["branches"], "additionalProperties": false,
+      "properties": {
+        "branches": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["when", "do"], "additionalProperties": false,
+            "properties": {"when": {"$ref": "#/$defs/condition"}, "do": {"$ref": "#/$defs/node"}}
+          }
+        },
+        "else": {"$ref": "#/$defs/node"}
+      }
+    },
+    "node": {
+      "type": "object", "minProperties": 1, "maxProperties": 1, "additionalProperties": false,
+      "properties": {
+        "sequence": {"$ref": "#/$defs/children"},
+        "fallback": {"$ref": "#/$defs/children"},
+        "parallel": {"$ref": "#/$defs/children"},
+        "retry": {"$ref": "#/$defs/counted"},
+        "repeat": {"$ref": "#/$defs/counted"},
+        "select": {"$ref": "#/$defs/select"},
+        "use": {"$ref": "#/$defs/use"},
+        "check": {"$ref": "#/$defs/condition"},
+        "say": {"type": "string", "minLength": 1},
+        "wait": {"type": "string"},
+        "store": {"$ref": "#/$defs/action"},
+        "stack": {"$ref": "#/$defs/action"},
+        "retrieve": {"$ref": "#/$defs/action"},
+        "separate": {"$ref": "#/$defs/action"},
+        "allocate": {"$ref": "#/$defs/action"},
+        "combine": {"$ref": "#/$defs/action"},
+        "sort": {"$ref": "#/$defs/action"},
+        "rotate": {"$ref": "#/$defs/action"},
+        "shift": {"$ref": "#/$defs/action"},
+        "orient": {"$ref": "#/$defs/action"},
+        "position": {"$ref": "#/$defs/action"},
+        "order": {"$ref": "#/$defs/action"},
+        "guide": {"$ref": "#/$defs/action"},
+        "convey": {"$ref": "#/$defs/action"},
+        "hold": {"$ref": "#/$defs/action"},
+        "release": {"$ref": "#/$defs/action"},
+        "clamp": {"$ref": "#/$defs/action"},
+        "unclamp": {"$ref": "#/$defs/action"},
+        "inspect": {"$ref": "#/$defs/action"},
+        "measure": {"$ref": "#/$defs/action"},
+        "count": {"$ref": "#/$defs/action"},
+        "apply": {"$ref": "#/$defs/action"},
+        "walk": {"$ref": "#/$defs/action"},
+        "look-at": {"$ref": "#/$defs/action"}
+      }
+    },
+    "motion": {
+      "type": "object", "required": ["kind", "frame", "dims", "basis", "duration", "weights"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"const": "dmp"},
+        "frame": {"$ref": "#/$defs/ref"},
+        "dims": {"enum": [6, 7]},
+        "basis": {"type": "integer", "minimum": 1},
+        "duration": {"type": "string"},
+        "weights": {"type": "string", "pattern": "^@[a-z][a-z0-9_-]*$(?![\\s\\S])"}
+      }
+    },
+    "data": {
+      "type": "object", "required": ["type", "count"], "additionalProperties": false,
+      "properties": {
+        "type": {"enum": ["f16", "f32", "i16"]},
+        "count": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "b64": {"type": "string"},
+        "values": {"type": "array", "items": {"type": "number"}}
+      },
+      "oneOf": [{"required": ["b64"], "not": {"required": ["values"]}}, {"required": ["values"], "not": {"required": ["b64"]}}]
+    },
+    "provenance": {
+      "type": "object", "required": ["author", "created", "modified", "origin", "licence"],
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "type": "object", "required": ["name", "key"], "additionalProperties": false,
+          "properties": {
+            "name": {"type": "string", "minLength": 1},
+            "key": {"type": "string", "pattern": "^ed25519:[0-9a-f]{64}$(?![\\s\\S])"}
+          }
+        },
+        "created": {"type": "string", "format": "date"},
+        "modified": {"type": "string", "format": "date"},
+        "origin": {"enum": ["written", "recorded", "learned"]},
+        "licence": {"enum": ["CC-BY-4.0", "CC0-1.0"]},
+        "robot": {"type": "string", "minLength": 1},
+        "region": {"type": "string", "pattern": "^[A-Z]{2}$(?![\\s\\S])"},
+        "parent": {
+          "type": "object", "required": ["id", "version", "sha256"], "additionalProperties": false,
+          "properties": {
+            "id": {"$ref": "#/$defs/uuid7"},
+            "version": {"$ref": "#/$defs/semver"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"},
+            "skill": {"$ref": "#/$defs/name"}
+          }
+        },
+        "tested": {
+          "type": "object", "required": ["simulator", "robots", "runs", "passed"], "additionalProperties": false,
+          "properties": {
+            "simulator": {"type": "string", "minLength": 1},
+            "robots": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "runs": {"type": "integer", "minimum": 1},
+            "passed": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    }
+  }
+}

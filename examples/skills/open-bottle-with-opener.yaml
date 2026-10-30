@@ -45,5 +45,6 @@ data:
 provenance:
   author: {name: A. Contributor, key: "ed25519:..."}
   created: 2026-10-27
+  modified: 2026-10-27
   origin: written
   licence: CC-BY-4.0

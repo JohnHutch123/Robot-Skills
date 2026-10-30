@@ -4,6 +4,10 @@ An open, platform-independent format for packaging humanoid robot skills, such a
 
 > **Status:** early draft (v0.1). Everything here is open for discussion. Please open an issue with comments, questions or ideas.
 
+This repository contains a design specification, illustrative examples, a PostgreSQL library prototype and an initial Python YAML/JSON authoring validator with a JSON Schema. There is no v0.2 specification, `.rsk` parser, packet compiler or robot runtime yet. The bottle examples contain placeholder keys and weights and intentionally fail validation. No example is an executable skill; packet sizes below are targets rather than measurements.
+
+**Safety:** robot safety remains the robot manufacturer's responsibility. RS describes skills; it does not replace manufacturer safety controls or certify safe execution. See [Safety scope and manufacturer responsibility](spec/rs-spec-v0.1.md#safety-scope-and-manufacturer-responsibility).
+
 ## The idea
 
 A skill should be something you can hand from one robot to another, like a recipe:
@@ -57,6 +61,9 @@ The full example is in [`examples/skills/`](examples/skills/).
 | [`examples/robots/`](examples/robots/) | Example robot capability profiles |
 | [`docs/library-database.md`](docs/library-database.md) | Design of the open skill library: global IDs, fast lookup, ratings, usage and comments |
 | [`library/`](library/) | SQL schema, example queries and sample data for the library (PostgreSQL) |
+| [`src/robot_skills/`](src/robot_skills/) | Python authoring validator, CLI and packaged JSON Schema |
+| [`docs/validator.md`](docs/validator.md) | Installation, supported profile, read/write API and future Delphi/C boundary |
+| [`tests/`](tests/) | Validator regression tests and a synthetic valid source fixture |
 
 ## Key design choices (v0.1)
 
@@ -74,6 +81,12 @@ The full example is in [`examples/skills/`](examples/skills/).
 2. Core spec v0.1 (draft in progress: [spec/rs-spec-v0.1.md](spec/rs-spec-v0.1.md))
 3. Worked examples: ironing a shirt (nested skills) and a locally adapted variant
 4. Tooling plan: record a person, generate a skill, test it in a simulator, publish it to an open library, and a 3D viewer
+
+### Toward v0.2
+
+The [v0.2 checklist](spec/rs-spec-v0.1.md#open-questions-for-v02) records the unresolved format and runtime decisions. The first implemented milestone is the [Python authoring validator](docs/validator.md): a bounded YAML/JSON profile, a JSON Schema, semantic checks and source read/write round trips. It is not complete RS validation. The `.rsk` grammar, packet format, dependency resolution and signature interoperability remain unfinished. Motion execution additionally needs a specified motion model, body adapter and reproducible simulator tests.
+
+Python is the initial reference toolchain. The plain-data read/write API and structured CLI diagnostics allow a later Delphi interface, potentially through a C ABI, without a second implementation of the rules. The first robot/simulator and executable demonstration task remain undecided; the bottle examples are explanatory rather than demonstrated motions.
 
 ## Contributing
 
