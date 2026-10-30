@@ -1,5 +1,6 @@
 -- Small sample data set for trying out library/schema.sql and library/queries.sql.
--- Keys and packets are dummy bytes.
+-- Keys and packets are dummy bytes, not signed or executable RS packets.
+-- Hashes still match the exact stored packet bytes.
 
 INSERT INTO skill_class (code, parent_code, name) VALUES
   ('2', NULL, 'Changing quantity'), ('2.1', '2', 'Divide'), ('2.1.2', '2.1', 'Detach a part'),
@@ -38,16 +39,16 @@ INSERT INTO skill (skill_id, name, author_id, class_code, title) VALUES
   ('01900000-0000-7000-8000-000000000c02', 'open-bottle-with-opener', '01900000-0000-7000-8000-000000000001', '2.1.2', 'Open a capped bottle with a bottle opener');
 
 INSERT INTO skill_version (version_id, skill_id, semver, v_major, v_minor, v_patch, sha256, packet, origin, status, library_signed_at) VALUES
-  ('01900000-0000-7000-8000-000000000d01', '01900000-0000-7000-8000-000000000c01', '1.0.0', 1, 0, 0, digest('grasp 1.0.0', 'sha256'), '\x00', 'written', 'listed', now()),
-  ('01900000-0000-7000-8000-000000000d02', '01900000-0000-7000-8000-000000000c02', '1.0.0', 1, 0, 0, digest('bottle 1.0.0', 'sha256'), '\x00', 'recorded', 'listed', now()),
-  ('01900000-0000-7000-8000-000000000d03', '01900000-0000-7000-8000-000000000c02', '1.1.0', 1, 1, 0, digest('bottle 1.1.0', 'sha256'), '\x00', 'recorded', 'listed', now());
+  ('01900000-0000-7000-8000-000000000d01', '01900000-0000-7000-8000-000000000c01', '1.0.0', 1, 0, 0, digest('grasp 1.0.0', 'sha256'), convert_to('grasp 1.0.0', 'UTF8'), 'written', 'listed', now()),
+  ('01900000-0000-7000-8000-000000000d02', '01900000-0000-7000-8000-000000000c02', '1.0.0', 1, 0, 0, digest('bottle 1.0.0', 'sha256'), convert_to('bottle 1.0.0', 'UTF8'), 'recorded', 'listed', now()),
+  ('01900000-0000-7000-8000-000000000d03', '01900000-0000-7000-8000-000000000c02', '1.1.0', 1, 1, 0, digest('bottle 1.1.0', 'sha256'), convert_to('bottle 1.1.0', 'UTF8'), 'recorded', 'listed', now());
 
 -- A variant made by B. Tester for a lever-style opener, derived from bottle 1.1.0.
 INSERT INTO skill (skill_id, name, author_id, class_code, title, parent_version_id) VALUES
   ('01900000-0000-7000-8000-000000000c03', 'open-bottle-with-lever-opener', '01900000-0000-7000-8000-000000000002', '2.1.2',
    'Open a capped bottle with a lever-style opener', '01900000-0000-7000-8000-000000000d03');
 INSERT INTO skill_version (version_id, skill_id, semver, v_major, v_minor, v_patch, sha256, packet, origin, status, library_signed_at) VALUES
-  ('01900000-0000-7000-8000-000000000d04', '01900000-0000-7000-8000-000000000c03', '1.0.0', 1, 0, 0, digest('lever 1.0.0', 'sha256'), '\x00', 'learned', 'listed', now());
+  ('01900000-0000-7000-8000-000000000d04', '01900000-0000-7000-8000-000000000c03', '1.0.0', 1, 0, 0, digest('lever 1.0.0', 'sha256'), convert_to('lever 1.0.0', 'UTF8'), 'learned', 'listed', now());
 
 INSERT INTO skill_version_tag (version_id, tag_id)
 SELECT v, t.tag_id FROM (VALUES

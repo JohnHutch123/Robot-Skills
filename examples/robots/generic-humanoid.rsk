@@ -2,6 +2,7 @@ rs 0.1
 
 # Example robot capability profile for RS v0.1.
 # Capability names follow RoboEarth's SRDL, simplified to plain names.
+# The referenced URDF is illustrative and is not supplied in this repository.
 
 robot generic-humanoid 1.0 {
   body    urdf "generic-humanoid.urdf"     # existing body description, reused as is

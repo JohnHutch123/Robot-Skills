@@ -4,11 +4,19 @@ Draft dated 2026-10-27. Not yet stable: everything may change.
 
 ## Status
 
-RS v0.1 is a first draft for review, not a stable standard. It defines one skill file with four layers (Contract, Plan, Motion, optional Models) plus Provenance and Signatures. It is written in a small RS grammar (YAML accepted as an alternative) and compiles to a signed CBOR packet of roughly 2 to 16 KB.
+RS v0.1 is a first draft for review, not a stable standard. It proposes one skill file with four layers (Contract, Plan, Motion, optional Models) plus Provenance and Signatures. The intended source forms are a small RS grammar and YAML, compiling to a signed CBOR packet with a target size of roughly 2 to 16 KB. An initial [YAML/JSON authoring validator and JSON Schema](../docs/validator.md) implement a bounded subset, not the complete draft. No `.rsk` parser, packet compiler or robot runtime is implemented yet; packet sizes are estimates, not measurements.
 
-Decisions built in: a new grammar with a YAML option; robot capabilities based on RoboEarth's SRDL; action words and class codes based on VDI 2860; class codes plus tags; variants that link to their parent; signed provenance. Licence: Apache 2.0 for this spec and its tools; library skills default to CC BY 4.0. Still open: a few grammar details and the simulator test format (see [Open questions](#open-questions-for-v02)).
+Decisions built in: a new grammar with a YAML option; robot capabilities based on RoboEarth's SRDL; action words and class codes based on VDI 2860; class codes plus tags; variants that link to their parent; signed provenance. Licence: Apache 2.0 for this spec and its tools; library skills default to CC BY 4.0. Still open: the complete grammar, execution and motion semantics, signing details, and reproducible simulator tests (see [Open questions](#open-questions-for-v02)).
 
 Keywords **must**, **should** and **may** carry their usual standards meaning: required, recommended, optional.
+
+## Safety scope and manufacturer responsibility
+
+Robot safety is the responsibility of the robot manufacturer, not the RS skill format, library or authoring validator. The manufacturer is responsible for the robot's safety architecture, protective controls, operating limits and safety validation of skill execution on its platform. RS is a task-description and interchange format, not a robot safety standard or certification scheme. This technical scope statement does not determine legal liability or replace applicable safety obligations.
+
+An RS skill **must not** disable, bypass or override manufacturer-provided safety protections. The manufacturer's controller **must** retain authority to reject, limit or stop a requested action, including actions in nested skills and locally adapted variants.
+
+Skill-level `limits`, `abort` conditions and action force caps describe task requirements and constraints; they are not substitutes for the manufacturer's independent safety controls. Passing source validation, matching a capability profile, carrying a valid signature or passing simulator tests does not establish that a skill is safe to execute on a particular robot or in a particular environment.
 
 ## Overview
 
@@ -35,7 +43,7 @@ flowchart LR
 
 ## Worked example
 
-The whole skill "open a bottle with an opener" fits on one screen; compiled, it is about 2 KB, most of it motion numbers. The full file is [`examples/skills/open-bottle-with-opener.rsk`](../examples/skills/open-bottle-with-opener.rsk).
+The following abbreviated sketch shows "open a bottle with an opener". The full illustrative source is [`examples/skills/open-bottle-with-opener.rsk`](../examples/skills/open-bottle-with-opener.rsk). Its keys and motion weights are placeholders, so it is not executable or publishable; the estimated packet size has not been measured.
 
 ```text
 rs 0.1
@@ -51,7 +59,7 @@ skill open-bottle-with-opener 1.0.0 {
   limits  payload >= 1.0 kg, grip_force >= 40 N
 
   objects {
-    bottle : Bottle       { has cap : CrownCap }
+    bottle : Bottle       { has neck : Neck, cap : CrownCap }
     opener : BottleOpener { has lip : Edge, handle : Handle }
   }
 
@@ -80,8 +88,10 @@ skill open-bottle-with-opener 1.0.0 {
   provenance {
     author  "A. Contributor"  key ed25519:3f9a...
     created 2026-10-27
+    modified 2026-10-27
     origin  recorded { devices: camera, microphone  region: "GB" }
     tested  sim:mujoco  robots: generic-humanoid  runs: 50  passed: 47
+    licence CC-BY-4.0
   }
 }
 ```
@@ -90,7 +100,7 @@ How to read it: the header says what the skill is and what a robot needs; `plan`
 
 ## Grammar rules
 
-The grammar is deliberately small so a parser fits in a few hundred lines in any language, including Delphi.
+The grammar is intended to be small enough to implement in any language, including Delphi. The EBNF below is a sketch, not a complete parser grammar: lexical rules, several productions, robot profiles and action-specific operands remain to be specified for v0.2.
 
 - **Files:** UTF-8 text, extension `.rsk` for source and `.rsp` for a compiled packet (`.rs` is avoided because Rust uses it). The first line **must** be `rs <major>.<minor>`.
 - **Blocks** use `{ }`. A statement ends at a line break, unless brackets are still open, the line ends with a comma, or the next line is indented further (a continuation). Otherwise indentation is only for readability.
@@ -180,13 +190,15 @@ skill open-container 1.0.0 {
       when is(box.closure, ScrewCap): use unscrew-cap    >=1.0 (target: box)
       when is(box.closure, RingPull): use pull-ring-tab  >=1.0 (target: box)
       when is(box.closure, CanLid):   use open-tin-can   >=1.0 (target: box)
-      else: say "I don't know how to open this container"
     }
+    check open(box)
   }
 }
 ```
 
 `is(<object>, <Type>)` is true when the object is of that type or a subtype of it. Object types form a tree (for example `Closure` has subtypes `CrownCap`, `ScrewCap`, `RingPull` and `CanLid`), so skills can be written for a general type and still match specific ones.
+
+The chooser deliberately has no `else`: an unsupported closure makes `select` fail instead of treating a spoken explanation as successful opening. The final check verifies the promised effect. The called skills are illustrative dependencies, not supplied implementations; the chooser's needs cannot be considered complete until those dependencies and their requirements are resolved.
 
 ### Action words (from VDI 2860)
 
@@ -220,7 +232,7 @@ Motions describe where the hand or tool goes, relative to an object, never joint
 
 **Frames and units:** positions in metres, angles in radians internally (the text form accepts `deg`), right-handed axes with z up. Every named object part defines its own frame, so `bottle.cap` means "origin at the cap centre, z along the bottle axis".
 
-**Data blocks:** `data <name> : <type>[<count>]` holds numbers as `f16`, `f32` or `i16`, written in base64 or as a list. f16 is the default; it gives about 1 mm resolution at 1 m and halves the size compared with f32. A skill that needs more precision uses f32.
+**Data blocks:** `data <name> : <type>[<count>]` holds numbers as `f16`, `f32` or `i16`, written in base64 or as a list. f16 is the proposed default and halves the storage compared with f32, but quantizing motion weights does not guarantee a particular end-effector accuracy. Precision must be evaluated using the specified motion model and task tolerances; a skill that needs more numeric precision uses f32.
 
 ## Robot capabilities
 
@@ -300,7 +312,7 @@ flowchart LR
   R4 -- "publish (opt-in)" --> L4
 ```
 
-**Variants.** An adapted skill keeps its name, gets a new version and a `parent` line pointing at the exact skill it came from (name, version and content hash). The library shows variants as a family tree, so a good adaptation (say, for a lever-style opener) sits beside the original instead of replacing it.
+**Variants.** A published adaptation gets a new `id` and its own version history. Its name may stay the same or change; names alone are not unique identities. A `parent` line identifies the exact version it came from (skill ID, version and content hash; a name may also be included for display). A new version of the same skill keeps its existing `id`. The library shows variants as a family tree, so a good adaptation (say, for a lever-style opener) sits beside the original instead of replacing it.
 
 **Learning record.** Kept on the robot in a separate `.rsl` file: retuned motion numbers, tool swaps, success and failure counts. It is not shared unless the owner publishes a variant, at which point the useful parts are folded into the new version.
 
@@ -310,7 +322,7 @@ flowchart LR
 | --- | --- | --- |
 | `author` | must | Display name and public key |
 | `created`, `modified` | must | Dates (ISO 8601) |
-| `parent` | must for variants | Name, version and SHA-256 hash of the parent skill |
+| `parent` | must for variants | Skill ID, version and SHA-256 hash of the parent packet; optional display name |
 | `origin` | must | `written`, `recorded` (from a person) or `learned` (by a robot), with details |
 | `robot` | should | Robot model the skill was made or adapted on |
 | `region` | may | Country or region code only, never an address |
@@ -340,19 +352,21 @@ origin recorded {
 
 ## Binary packet and YAML form
 
-The `.rsk` text, or the same content in YAML, compiles to one `.rsp` binary packet; any of the three converts to the others without loss, apart from comments.
+The intended conversion is from `.rsk` text, or the same content in YAML, to one `.rsp` binary packet. Lossless semantic conversion between source forms and the decoded payload is a v0.2 goal, not an implemented feature. Source comments and formatting are not preserved; reconstructing a payload alone does not reconstruct the original signed envelope.
 
 ### Packet layout
 
-1. **Payload:** the skill as a CBOR map ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) in deterministic encoding, so the same skill always produces the same bytes and the same hash. Field names become small integers (`class` = 3, `plan` = 10, and so on, listed in an appendix to come), which is most of the size saving.
+1. **Payload:** the skill as a CBOR map ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) in deterministic encoding, so the same normalized skill produces the same payload bytes. Field names are intended to become small integers; the key table and normalization rules are not assigned yet.
 2. **Signatures:** the payload is wrapped in a COSE_Sign structure ([RFC 9052](https://www.rfc-editor.org/rfc/rfc9052)), which holds several signatures over the same bytes: the author's, then the library's. Algorithm: EdDSA with Ed25519.
 3. **Models:** never embedded. A `model` entry gives a name, format, size and SHA-256 hash; robots fetch it separately if they can use it.
 
-**Size targets:** a packet without models **should** be under 16 KB. The open-bottle example is about 2 KB; most of that is motion numbers.
+**Hash boundaries:** the library's `sha256` identifies the complete stored `.rsp` packet, including its COSE envelope and signatures. Adding a library signature changes that packet hash even if the payload is unchanged. Author submission hashes therefore cannot be assumed to equal the final listed packet hash. v0.2 must define the exact COSE protected headers, signature inputs, countersigning workflow and whether a separate payload hash is needed. A packet hash is not a substitute for signature verification.
+
+**Size targets:** a packet without models **should** be under 16 KB. The open-bottle example's roughly 2 KB target remains unverified until real motion data and an encoder exist.
 
 ### YAML form
 
-The same skill in YAML, for people and tools that prefer it (full file: [`examples/skills/open-bottle-with-opener.yaml`](../examples/skills/open-bottle-with-opener.yaml)):
+An abbreviated YAML sketch, for people and tools that prefer it (full illustrative file: [`examples/skills/open-bottle-with-opener.yaml`](../examples/skills/open-bottle-with-opener.yaml)):
 
 ```yaml
 rs: "0.1"
@@ -370,10 +384,15 @@ plan:
     - retry: {times: 3, do: [{rotate: {what: opener, about: opener.lip, by: 25 deg}}]}
 ```
 
-The YAML form is checked against a JSON Schema published with the spec, so ordinary YAML and JSON libraries can read and validate it.
+A [JSON Schema](../src/robot_skills/skill.schema.json) and [Python validator](../docs/validator.md) now implement the explicitly versioned `rs-0.1-authoring-v1` subset. The profile documents its supported source shapes and limitations; it does not settle the full v0.2 format. The validator checks selected semantics, references, units and numeric data, but does not resolve dependencies or verify signatures. The placeholder bottle example remains intentionally invalid.
 
 ## Open questions for v0.2
 
+- [ ] **Executable format:** complete the grammar and YAML/JSON Schema, define one normalized data model and supply valid fixtures plus parser/validator round-trip tests. Specify version-range syntax, required versus ignorable extensions, and resolve `use` calls by stable skill ID, not an ambiguous name alone.
+- [ ] **Execution semantics:** define running/success/failure, condition precedence and unknown observations, timeouts, retries, cancellation and parallel resource conflicts. Abort and robot-local safety limits must not be bypassed by nested calls.
+- [ ] **Motion interoperability:** define DMP/ProMP equations and parameters, orientation representation, spline/force layouts, numeric byte order and validity checks; weights and dimension counts alone do not define a portable trajectory.
+- [ ] **Capability matching:** define count-aware inference and branch/dependency requirements. Distinguish catalogue candidates from runtime checks of physical limits, actions and the actual scene.
+- [ ] **Publication and trust:** fix payload versus envelope hashing, COSE details, key trust and revocation, dependency pinning, and the simulator result required before listing. Define SemVer prerelease ordering and how the database's version columns are kept consistent.
 - [ ] **Predicates:** agree the starter list (`is`, `upright`, `capped`, `reachable`, `holding`, `open`, `closed`, `on`, `in`, ...) and how a robot proves each one, usually by camera.
 - [ ] **Object types:** reuse an existing object vocabulary or keep our own short list? Types need named parts (`cap`, `handle`) with standard frames.
 - [ ] **Simulator tests:** a standard test-scene format so the library's re-test is repeatable. MuJoCo scene files are the likely base.

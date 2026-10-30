@@ -28,13 +28,14 @@ skill open-container 1.0.0 {
       when is(box.closure, ScrewCap): use unscrew-cap    >=1.0 (target: box)   # bottles and jars
       when is(box.closure, RingPull): use pull-ring-tab  >=1.0 (target: box)
       when is(box.closure, CanLid):   use open-tin-can   >=1.0 (target: box)
-      else: say "I don't know how to open this container"
     }
+    check open(box)
   }
 
   provenance {
     author  "A. Contributor"  key ed25519:...
     created 2026-10-28
+    modified 2026-10-28
     origin  written
     licence CC-BY-4.0
   }
