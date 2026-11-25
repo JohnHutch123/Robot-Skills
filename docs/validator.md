@@ -82,8 +82,10 @@ to settle the eventual execution or binary standards:
 | Controls | `sequence`, `fallback`, `parallel`: nonempty node lists; `retry`, `repeat`: `{times: positive integer, do: [nodes]}` |
 | Selection | `select: {branches: [{when: condition, do: node}], else: node}`; `else` is optional |
 | Actions | One verb per node; object actions use `{what: object, ...}`; `say` takes a string, `wait` takes a duration |
-| Action options | `to`, `about`, `in`: object references; `with`: `left/right`; `motion`: name; `force`: `<= quantity N`; `by`: `deg/rad` for `rotate/orient`, otherwise `m/mm` |
-| Calls | `use: {skill: name, version: range, id: optional UUID, target: optional object, hand: optional left/right}` |
+| Action options | `to`, `about`, `in`: object references; `with`: `left/right`; `motion`: name; `force`: `<= quantity N`; `torque`: `<= quantity Nm`; `by`: `deg/rad` for `rotate/orient`, otherwise `m/mm`; `expect`: `force ~ quantity N` or `torque ~ quantity Nm`, not above the cap; `fail_on: {limit: reason, slip: reason}`, where `limit` needs a cap |
+| Reasonable Human caps | `force`/`torque` may be `<= rh.<action>.<level>` with level `weak` or `reasonable`; `twist` needs `rh.twist(d: <mm or m>).<level>`, 20 to 110 mm. The skill must list `profiles: [{name: rs-rh, version: range}]`. Values match [`profiles/rs-rh.yaml`](../profiles/rs-rh.yaml) 1.0 |
+| Failure reasons | `failures: [names]` lists the reasons a skill can fail with; every `fail_on` reason must be listed |
+| Calls | `use: {skill: name, version: range, id: optional UUID, target: optional object, hand: optional left/right, on_fail: [{reason: name, do: node}]}`; a reason may be handled once per call |
 | Ranges | Space-separated comparisons, e.g. `>=1.0 <2.0`; unsigned `major.minor` or `major.minor.patch`, no leading zeros; no caret, OR, wildcard or prerelease ranges |
 | Motions | DMP declarations only, with `frame`, `dims` (6 or 7), `basis`, `duration`, `weights` |
 | Data | `type: f16/f32/i16`, positive `count`, exactly one of `values: [numbers]` or `b64: string` |

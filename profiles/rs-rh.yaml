@@ -1,0 +1,95 @@
+# RS Reasonable Human (RS-RH) reference profile.
+# Human force and torque reference values that skills cite as belief-test limits.
+# These are NOT safety limits and NOT allowed forces on a human body.
+# See spec/rs-spec-v0.1.md#reasonable-human-profile and docs/reasonable-human.md.
+profile: rs-rh
+version: 1.0.0
+title: RS Reasonable Human, adult
+population: >-
+  Healthy adults. A single adult profile is used at this stage; older-adult
+  and child-safe profiles may be added later.
+levels:
+  weak: >-
+    What a frail adult can manage. Household products should give way at or
+    below this value.
+  reasonable: >-
+    The effort a healthy adult uses before suspecting that something is
+    wrong. Reaching it without progress means the skill's assumption is
+    probably wrong (for example, not a screw cap) and the skill must stop and
+    branch instead of applying more force.
+actions:
+  grip:
+    quantity: force
+    meaning: Power grip, one hand
+    weak: 184 N
+    reasonable: 250 N
+    source: en-1005-3
+  push-arm:
+    quantity: force
+    meaning: Arm push, trunk supported
+    weak: 186 N
+    reasonable: 275 N
+    source: en-1005-3
+  pull-arm:
+    quantity: force
+    meaning: Arm pull, trunk supported
+    weak: 169 N
+    reasonable: 225 N
+    source: en-1005-3
+  push-arm-free:
+    quantity: force
+    meaning: Arm push, no trunk support
+    weak: 30 N
+    reasonable: 62 N
+    source: en-1005-3
+  pull-arm-free:
+    quantity: force
+    meaning: Arm pull, no trunk support
+    weak: 28 N
+    reasonable: 55 N
+    source: en-1005-3
+  push-body:
+    quantity: force
+    meaning: Whole body push, standing
+    weak: 119 N
+    reasonable: 200 N
+    source: en-1005-3
+  pull-body:
+    quantity: force
+    meaning: Whole body pull, standing
+    weak: 96 N
+    reasonable: 145 N
+    source: en-1005-3
+  twist:
+    quantity: torque
+    meaning: Twist a round lid or cap with one hand while the other holds the container
+    weak: 3.6 Nm
+    reasonable: 6.5 Nm
+    reference_diameter: 66 mm
+    diameter_range: [20 mm, 110 mm]
+    scaling: >-
+      Values are for a 66 mm lid. For another diameter d, multiply by
+      d / 66 mm (finger force acts at the lid edge). A 28 mm drink cap gives
+      about 1.5 Nm weak and 2.8 Nm reasonable. This scaling is an estimate
+      and is the least certain value in the profile; small caps are gripped
+      with the fingertips and real values may be lower.
+    source: lid-studies
+notes:
+  - >-
+    EN 1005-3 values are its basic force capacities: weak is the domestic
+    column (1st percentile, adults 20 to 65), reasonable is the professional
+    column (15th percentile). The agreed target for reasonable is near the
+    adult mean, so these push, pull and grip values are conservative (a skill
+    stops and branches earlier) until mean data replaces them.
+  - >-
+    Twist weak is the mean for women aged about 74 on a 67 mm lid (Rohles
+    1983). Twist reasonable is near the adult male mean; reported means on
+    65 to 75 mm lids span 5.8 to 8.7 Nm.
+  - Pinch and fingertip values are not yet included because no source has been checked.
+sources:
+  en-1005-3:
+    title: EN 1005-3:2002+A1:2008 Safety of machinery, human physical performance, recommended force limits for machinery operation, Table 1
+    url: https://cdn.standards.iteh.ai/samples/31655/634bfdeff8734b6b9a14f48568844ef6/SIST-EN-1005-3-2002-A1-2008.pdf
+  lid-studies:
+    title: Yoxall A. and Rowson J. (2015) Talking about torque, Packaging Technology and Science 28(1) 1-14, doi 10.1002/pts.2079 (review of nine lid-opening studies)
+    url: https://eprints.whiterose.ac.uk/90469/1/Talking%20about%20Torque.pdf

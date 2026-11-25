@@ -32,6 +32,26 @@ RANGE = re.compile(
     r"(?:>=|<=|>|<|=)?(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
     r"(?:\.(?:0|[1-9][0-9]*))?"
 )
+# RS Reasonable Human profile 1.0 (profiles/rs-rh.yaml): action -> (quantity, weak, reasonable).
+# Twist values are for REFERENCE_DIAMETER_MM and scale with diameter.
+RH_PROFILE = "rs-rh"
+RH_ACTIONS = {
+    "grip": ("force", Decimal("184"), Decimal("250")),
+    "push-arm": ("force", Decimal("186"), Decimal("275")),
+    "pull-arm": ("force", Decimal("169"), Decimal("225")),
+    "push-arm-free": ("force", Decimal("30"), Decimal("62")),
+    "pull-arm-free": ("force", Decimal("28"), Decimal("55")),
+    "push-body": ("force", Decimal("119"), Decimal("200")),
+    "pull-body": ("force", Decimal("96"), Decimal("145")),
+    "twist": ("torque", Decimal("3.6"), Decimal("6.5")),
+}
+RH_SCALED = {"twist"}
+RH_REFERENCE_DIAMETER_MM = Decimal("66")
+RH_DIAMETER_RANGE_MM = (Decimal("20"), Decimal("110"))
+RH_LIMIT = re.compile(
+    rf"<=\s*rh\.([a-z][a-z0-9]*(?:-[a-z0-9]+)*)(?:\(\s*d:\s*({NUMBER})\s+(mm|m)\s*\))?\.([a-z]+)"
+)
+EXPECT = re.compile(rf"(force|torque)\s*~\s*({NUMBER})\s+(N|Nm)")
 CAPABILITIES = {
     "BaseMotion", "Walking", "ArmMotion", "GripperMotion", "FingerMotion",
     "Grasping", "Bimanual", "ForceSensing", "TactileSensing", "Camera",
@@ -289,6 +309,13 @@ class _Checks:
                 self.add("dependency.range", path + "/version", "Expected space-separated comparisons such as >=1.0 <2.0.")
             if "target" in value:
                 self.ref(value["target"], path + "/target")
+            reasons = set()
+            for index, handler in enumerate(value.get("on_fail", [])):
+                if handler["reason"] in reasons:
+                    self.add("failure.duplicate", f"{path}/on_fail/{index}/reason",
+                             f"Failure reason handled more than once: {handler['reason']}")
+                reasons.add(handler["reason"])
+                self.node(handler["do"], f"{path}/on_fail/{index}/do")
             self.add("dependency.unresolved", path, "Dependency is not resolved or validated by this local validator.", "warning")
         else:
             for field in ("what", "to", "about", "in"):
@@ -299,8 +326,79 @@ class _Checks:
             if "by" in value:
                 units = {"deg", "rad"} if kind in ("rotate", "orient") else {"m", "mm"}
                 self.quantity(value["by"], units, path + "/by", positive=False)
-            if "force" in value:
-                self.quantity(value["force"], {"N"}, path + "/force", comparator="<=")
+            caps = {}
+            for field, unit in (("force", "N"), ("torque", "Nm")):
+                if field in value:
+                    caps[field] = self.limit(value[field], field, unit, path + "/" + field)
+            if "expect" in value:
+                self.expect(value["expect"], caps, path + "/expect")
+            for event, reason in value.get("fail_on", {}).items():
+                if event == "limit" and not caps:
+                    self.add("failure.limit", f"{path}/fail_on/limit",
+                             "fail_on limit needs a force or torque cap on the same action.")
+                if reason not in self.document.get("failures", []):
+                    self.add("failure.undeclared", f"{path}/fail_on/{event}",
+                             f"Failure reason is not listed in failures: {reason}")
+
+    def limit(self, text: str, quantity: str, unit: str, path: str):
+        """Check a cap; return its value in N or Nm when known, else None."""
+        text = text.strip()
+        match = RH_LIMIT.fullmatch(text)
+        if not match:
+            self.quantity(text, {unit}, path, comparator="<=")
+            number = re.fullmatch(r"<=\s*" + QUANTITY.pattern, text)
+            try:
+                return Decimal(number[1]) if number and number[2] == unit else None
+            except InvalidOperation:
+                return None
+        action, size, size_unit, level = match.groups()
+        if RH_PROFILE not in {item["name"] for item in self.document.get("profiles", [])}:
+            self.add("profile.missing", path, f"rh. references need profiles to list {RH_PROFILE}.")
+        if action not in RH_ACTIONS:
+            self.add("profile.action", path, f"Unknown {RH_PROFILE} action: {action}")
+            return None
+        kind, weak, reasonable = RH_ACTIONS[action]
+        if level not in ("weak", "reasonable"):
+            self.add("profile.level", path, "Expected level weak or reasonable.")
+            return None
+        if kind != quantity:
+            self.add("profile.quantity", path, f"rh.{action} is a {kind} value and cannot cap {quantity}.")
+            return None
+        value = weak if level == "weak" else reasonable
+        if action in RH_SCALED:
+            if size is None:
+                self.add("profile.diameter", path, f"rh.{action} needs a diameter, such as rh.{action}(d: 28 mm).{level}.")
+                return None
+            try:
+                millimetres = Decimal(size) * (1000 if size_unit == "m" else 1)
+            except InvalidOperation:
+                self.add("quantity.value", path, "Quantity exponent is outside the supported numeric range.")
+                return None
+            low, high = RH_DIAMETER_RANGE_MM
+            if not low <= millimetres <= high:
+                self.add("profile.diameter", path, f"Diameter must be between {low} mm and {high} mm.")
+                return None
+            return value * millimetres / RH_REFERENCE_DIAMETER_MM
+        if size is not None:
+            self.add("profile.diameter", path, f"rh.{action} does not take a diameter.")
+            return None
+        return value
+
+    def expect(self, text: str, caps: dict, path: str):
+        match = EXPECT.fullmatch(text.strip())
+        if not match or match[3] != {"force": "N", "torque": "Nm"}[match[1]]:
+            self.add("quantity.unit", path, "Expected force ~ <number> N or torque ~ <number> Nm.")
+            return
+        try:
+            number = Decimal(match[2])
+        except InvalidOperation:
+            self.add("quantity.value", path, "Quantity exponent is outside the supported numeric range.")
+            return
+        if number <= 0:
+            self.add("quantity.value", path, "Quantity must be greater than zero.")
+        cap = caps.get(match[1])
+        if cap is not None and number > cap:
+            self.add("limit.expect", path, "Expected value is above the action's cap.")
 
     def data(self):
         for name, block in self.document.get("data", {}).items():
@@ -352,6 +450,11 @@ class _Checks:
         for name, text in self.document.get("limits", {}).items():
             self.quantity(text, {"payload": {"kg"}, "reach": {"m", "mm"}, "grip_force": {"N"}}[name],
                           "/limits/" + name, comparator=">=")
+        for index, item in enumerate(self.document.get("profiles", [])):
+            if item["name"] != RH_PROFILE:
+                self.add("profile.unknown", f"/profiles/{index}/name", f"Unknown reference profile: {item['name']}")
+            if not item["version"].strip() or not all(RANGE.fullmatch(term) for term in item["version"].split()):
+                self.add("dependency.range", f"/profiles/{index}/version", "Expected space-separated comparisons such as >=1.0 <2.0.")
         self.node(self.document["plan"], "/plan")
         self.data()
         for name, motion in self.document.get("motions", {}).items():

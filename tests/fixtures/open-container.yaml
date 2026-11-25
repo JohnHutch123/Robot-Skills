@@ -1,0 +1,42 @@
+# Synthetic validator fixture: the open-container chooser with recovery.
+# If unscrew-cap ends with not-a-screw-cap, the closure was misjudged and the
+# chooser switches to the crown-cap skill instead of applying more force.
+rs: "0.1"
+skill: open-container
+version: 1.1.0
+id: 0192f3a5-0a10-7c44-8b1e-2f7d9e6a4c01
+title: Open a closed container
+class: RS 2.1.2
+tags: [object:bottle, object:jar, object:tin-can, domain:kitchen]
+needs: [ArmMotion, Grasping, Camera]
+objects:
+  box: {type: Container, parts: {closure: Closure}}
+pre: ["closed(box)", "reachable(box)"]
+effect: ["open(box)"]
+success: {when: "open(box)", within: 60 s}
+abort: "force > 80 N"
+plan:
+  sequence:
+    - inspect: {what: box.closure}
+    - select:
+        branches:
+          - when: "is(box.closure, CrownCap)"
+            do: {use: {skill: open-crown-cap, version: ">=1.0", target: box}}
+          - when: "is(box.closure, ScrewCap)"
+            do:
+              use:
+                skill: unscrew-cap
+                version: ">=1.1"
+                target: box
+                on_fail:
+                  - reason: not-a-screw-cap
+                    do: {use: {skill: open-crown-cap, version: ">=1.0", target: box}}
+    - check: "open(box)"
+provenance:
+  author:
+    name: Validator fixture
+    key: ed25519:d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+  created: 2026-10-28
+  modified: 2026-11-25
+  origin: written
+  licence: CC-BY-4.0

@@ -1,0 +1,41 @@
+# Synthetic validator fixture, not a measured motion or a signed robot skill.
+# Shows Reasonable Human (rs-rh) limits: reaching the reasonable twist torque
+# without the cap turning ends the skill with not-a-screw-cap.
+rs: "0.1"
+skill: unscrew-cap
+version: 1.1.0
+id: 0192f3a5-1b20-7d55-9c2f-3e8a0f7b5d02
+title: Unscrew a cap from a bottle or jar
+class: RS 2.1.2
+tags: [object:bottle, object:jar, object:screw-cap, body:two-hands, domain:kitchen]
+needs: [ArmMotion x2, GripperMotion x2, Grasping, ForceSensing, Camera]
+profiles:
+  - {name: rs-rh, version: ">=1.0 <2.0"}
+failures: [not-a-screw-cap, regrasp]
+objects:
+  bottle: {type: Bottle, parts: {body: Surface, cap: ScrewCap}}
+pre: ["capped(bottle)", "upright(bottle)", "reachable(bottle)"]
+effect: ["not capped(bottle)"]
+success: {when: "not capped(bottle) and upright(bottle)", within: 20 s}
+abort: "not upright(bottle)"
+plan:
+  sequence:
+    - hold: {what: bottle.body, with: left, force: "<= rh.grip.reasonable"}
+    - hold: {what: bottle.cap, with: right, force: "<= rh.grip.reasonable"}
+    - rotate:
+        what: bottle.cap
+        about: bottle
+        by: -720 deg
+        with: right
+        expect: torque ~ 1.0 Nm
+        torque: "<= rh.twist(d: 28 mm).reasonable"
+        fail_on: {limit: not-a-screw-cap, slip: regrasp}
+    - check: "not capped(bottle)"
+provenance:
+  author:
+    name: Validator fixture
+    key: ed25519:d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+  created: 2026-11-25
+  modified: 2026-11-25
+  origin: written
+  licence: CC-BY-4.0

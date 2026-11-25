@@ -5,7 +5,7 @@ rs 0.1
 # The called skills (open-crown-cap, unscrew-cap, pull-ring-tab, open-tin-can)
 # are separate skills, each tested and rated on its own.
 
-skill open-container 1.0.0 {
+skill open-container 1.1.0 {
   id      0192f3a5-0a10-7c44-8b1e-2f7d9e6a4c01   # global ID (UUID v7), same for all versions
   title   "Open a closed container"
   class   RS 2.1.2                               # Changing quantity > Divide > Detach a part
@@ -25,7 +25,9 @@ skill open-container 1.0.0 {
     inspect box.closure
     select {
       when is(box.closure, CrownCap): use open-crown-cap >=1.0 (target: box)
-      when is(box.closure, ScrewCap): use unscrew-cap    >=1.0 (target: box)   # bottles and jars
+      when is(box.closure, ScrewCap): use unscrew-cap    >=1.1 (target: box)   # bottles and jars
+        # A cap that resists Reasonable Human torque was probably misjudged.
+        on fail(not-a-screw-cap): use open-crown-cap >=1.0 (target: box)
       when is(box.closure, RingPull): use pull-ring-tab  >=1.0 (target: box)
       when is(box.closure, CanLid):   use open-tin-can   >=1.0 (target: box)
     }
@@ -35,7 +37,7 @@ skill open-container 1.0.0 {
   provenance {
     author  "A. Contributor"  key ed25519:...
     created 2026-10-28
-    modified 2026-10-28
+    modified 2026-11-25
     origin  written
     licence CC-BY-4.0
   }

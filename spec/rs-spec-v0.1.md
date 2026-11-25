@@ -115,14 +115,22 @@ The grammar is intended to be small enough to implement in any language, includi
 file        = header skill ;
 header      = "rs" version-mm ;
 skill       = "skill" name semver "{" { section } "}" ;
-section     = id | title | class | tags | needs | limits | objects | pre | effect
-            | success | abort | plan | motion | model | data | provenance | ext ;
+section     = id | title | class | tags | needs | limits | profiles | failures
+            | objects | pre | effect | success | abort | plan | motion | model | data
+            | provenance | ext ;
+profiles    = "profile" name range { "," name range } ;
+failures    = "failures" name { "," name } ;
 plan        = "plan" node ;
 node        = control "{" { node } "}" | select | action | use | check ;
 select      = "select" "{" { "when" condition ":" node } [ "else" ":" node ] "}" ;
 control     = "sequence" | "fallback" | "parallel" | "retry" count | "repeat" count ;
 action      = verb ref [ "to" ref | "about" ref ] [ "by" quantity ] { option } ;
-use         = "use" name [ range ] "(" [ arg { "," arg } ] ")" ;
+use         = "use" name [ range ] "(" [ arg { "," arg } ] ")" { on-fail } ;
+on-fail     = "on" "fail" "(" name ")" ":" node ;
+option      = "motion:" name | "with" hand | ( "force" | "torque" ) "<=" cap
+            | "expect" ( "force" | "torque" ) "~" quantity
+            | "on" ( "limit" | "slip" ) ":" "fail" name ;
+cap         = quantity | "rh." name [ "(" "d:" quantity ")" ] "." ( "weak" | "reasonable" ) ;
 check       = "check" condition ;
 condition   = [ "not" ] predicate { ( "and" | "or" ) [ "not" ] predicate } ;
 motion      = "motion" name ":" kind "{" { field } "}" ;
@@ -142,6 +150,8 @@ The contract is everything a robot or library needs to decide whether a skill fi
 | `tags` | should | Facet tags `facet:value` (see [Classification](#classification)) |
 | `needs` | must | Capabilities the robot must have, with counts (`ArmMotion x2`) |
 | `limits` | may | Minimum physical limits: payload, reach, grip force |
+| `profile` | may | Reference profiles the skill cites, with a version range, such as `profile rs-rh >=1.0` (see [Reasonable Human profile](#reasonable-human-profile)) |
+| `failures` | may | Named reasons this skill can fail with, such as `not-a-screw-cap`, so callers can handle each one |
 | `objects` | must | Named roles the skill acts on, each with a type and named parts |
 | `pre` | must | Conditions that must hold before starting |
 | `effect` | must | Conditions that will hold after success; planners chain skills with these |
@@ -165,6 +175,7 @@ The plan is a tree: control nodes decide order, and leaves are actions, checks o
 | `retry N { }` | Re-run the block up to N times until it succeeds |
 | `repeat N { }` | Run the block exactly N times |
 | `use <skill> <range> (args)` | Run another skill; its success and effects count as this step's |
+| `use ... on fail(<reason>): <node>` | If the called skill fails with that named reason, run the node instead; the step's result is the node's result. Other failures pass up unchanged |
 | `check <condition>` | Succeed if the condition holds now |
 
 ### Choosing between skills: `select` versus `fallback`
@@ -187,7 +198,8 @@ skill open-container 1.0.0 {
     inspect box.closure
     select {
       when is(box.closure, CrownCap): use open-crown-cap >=1.0 (target: box)
-      when is(box.closure, ScrewCap): use unscrew-cap    >=1.0 (target: box)
+      when is(box.closure, ScrewCap): use unscrew-cap    >=1.1 (target: box)
+        on fail(not-a-screw-cap): use open-crown-cap >=1.0 (target: box)
       when is(box.closure, RingPull): use pull-ring-tab  >=1.0 (target: box)
       when is(box.closure, CanLid):   use open-tin-can   >=1.0 (target: box)
     }
@@ -197,6 +209,8 @@ skill open-container 1.0.0 {
 ```
 
 `is(<object>, <Type>)` is true when the object is of that type or a subtype of it. Object types form a tree (for example `Closure` has subtypes `CrownCap`, `ScrewCap`, `RingPull` and `CanLid`), so skills can be written for a general type and still match specific ones.
+
+The `on fail(not-a-screw-cap)` handler covers a closure the camera misjudged. `unscrew-cap` ends with that reason when it reaches a Reasonable Human torque and the cap has not turned (see [Reasonable Human profile](#reasonable-human-profile)), so the chooser tries the crown-cap skill instead of applying more force.
 
 The chooser deliberately has no `else`: an unsupported closure makes `select` fail instead of treating a spoken explanation as successful opening. The final check verifies the promised effect. The called skills are illustrative dependencies, not supplied implementations; the chooser's needs cannot be considered complete until those dependencies and their requirements are resolved.
 
@@ -213,7 +227,58 @@ Every action leaf **must** use one of these verbs. They are the shared vocabular
 | Checking | `inspect`, `measure`, `count` | `measure shirt.wrinkles` |
 | RS additions (not in VDI 2860) | `apply` (force or heat to a surface), `walk`, `look-at`, `say`, `wait` | `apply iron to shirt.front with 20 N` |
 
-Action options: `motion: <name>` picks the movement, `force <= <q>` caps force, `speed <= <q>` caps speed, `with <hand>` names a hand. A robot **may** perform an action with its own controller when no motion is given.
+Action options: `motion: <name>` picks the movement, `force <= <q>` caps force, `torque <= <q>` caps torque, `speed <= <q>` caps speed, `with <hand>` names a hand. A cap may cite the Reasonable Human profile instead of a number. `expect force ~ <q>` or `expect torque ~ <q>` gives the value the object normally needs. `on limit: fail <reason>` and `on slip: fail <reason>` end the action with a named reason (see below). A robot **may** perform an action with its own controller when no motion is given.
+
+### Reasonable Human profile
+
+**Human-level force is a test of the skill's assumptions.** Household objects are made to be opened and moved by people, including weak ones. If a robot reaches the force or torque a healthy adult would use and the object has not moved, the likeliest cause is a wrong assumption: not a screw cap, a hidden lock, the wrong direction. The skill **must** then stop and fail with a named reason so its caller can choose another way. It **must not** keep increasing force.
+
+The values come from the **RS Reasonable Human (RS-RH)** reference profile, [`profiles/rs-rh.yaml`](../profiles/rs-rh.yaml). It is versioned like a skill, and its values are traced to published sources ([findings](../docs/reasonable-human.md)). Version 1.0 has one profile, healthy adults. Each action has two levels:
+
+| Level | Meaning |
+| --- | --- |
+| `weak` | What a frail adult can manage. Household products should give way at or below it |
+| `reasonable` | The effort a healthy adult uses before suspecting something is wrong; the target is near the adult mean |
+
+| Action | Quantity | Weak | Reasonable |
+| --- | --- | --- | --- |
+| `grip` (power grip, one hand) | force | 184 N | 250 N |
+| `push-arm` / `pull-arm` (trunk supported) | force | 186 / 169 N | 275 / 225 N |
+| `push-arm-free` / `pull-arm-free` (no support) | force | 30 / 28 N | 62 / 55 N |
+| `push-body` / `pull-body` (standing) | force | 119 / 96 N | 200 / 145 N |
+| `twist` (round lid, per 66 mm diameter) | torque | 3.6 Nm | 6.5 Nm |
+
+A skill cites a value as `rh.<action>.<level>`. Twisting depends on lid size, so `twist` takes a diameter, `rh.twist(d: 28 mm).reasonable`, and scales by d / 66 mm for diameters from 20 to 110 mm. A 28 mm drink cap gives about 2.8 Nm. That scaling is an estimate, and small-cap data should replace it.
+
+```text
+skill unscrew-cap 1.1.0 {
+  profile  rs-rh >=1.0 <2.0
+  failures not-a-screw-cap, regrasp
+
+  plan sequence {
+    hold bottle.body with left   force <= rh.grip.reasonable
+    hold bottle.cap  with right  force <= rh.grip.reasonable
+    rotate bottle.cap about bottle by -720 deg  with right
+        expect torque ~ 1.0 Nm
+        torque <= rh.twist(d: 28 mm).reasonable
+        on limit: fail not-a-screw-cap
+        on slip:  fail regrasp
+    check not capped(bottle)
+  }
+}
+```
+
+**Limit and slip events.** An action **reaches its limit** when the measured force or torque has been at its cap for 0.5 s while the action has progressed less than 2 deg or 2 mm. It **slips** when the hand moves relative to the object it holds. A slip is a grip problem, not a wrong assumption, so it has its own reason. A robot's controller **may** use stricter values for both.
+
+**Four force zones.** Below `expect` is normal. Between `expect` and the cap, the robot continues slowly. At the cap with no progress, the action fails with its reason. The `abort` condition, the object's fragility and the manufacturer's safety limits remain a separate hard stop and may be lower than any RS-RH value.
+
+**Rules:**
+
+- RS-RH values are belief tests for objects. They are **not** safety limits and **not** allowed forces on a person; contact with people is governed by the manufacturer and standards such as ISO/TS 15066.
+- `expect` **must not** be above the action's cap.
+- Local learning **may** change a skill's `expect` value but **must not** raise a cap above the cited RS-RH value. Going further needs a different skill, such as using a jar opener.
+- If a robot's rated force is below a cited RS-RH value, the robot reaches its own limit first. Its failure **should** say that the robot's limit was hit, so it is not mistaken for a wrong assumption.
+- A robot **should** record each named failure in its learning record. Shared with the library, repeated `not-a-screw-cap` results show which perception skills misjudge closures.
 
 ## Motion layer
 
@@ -398,6 +463,7 @@ A [JSON Schema](../src/robot_skills/skill.schema.json) and [Python validator](..
 - [ ] **Simulator tests:** a standard test-scene format so the library's re-test is repeatable. MuJoCo scene files are the likely base.
 - [ ] **Body adapter interface:** the exact calls a robot must provide for each VDI 2860 verb. This becomes the porting guide for robot makers.
 - [ ] **CBOR key table:** fix the integer key for every field.
+- [ ] **Reasonable Human data:** add sourced pinch and fingertip values, replace the twist diameter scaling with small-cap measurements, and replace the EN 1005-3 15th-percentile push, pull and grip values with adult means. Decide whether older-adult and child-safe profiles are needed.
 - [ ] **Translations of VDI 2860 terms:** confirm the English verb names against the official standard text.
 
 ## References
