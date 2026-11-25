@@ -1,0 +1,45 @@
+rs 0.1
+
+# Example skill using the RS Reasonable Human profile (profiles/rs-rh.yaml).
+# If the cap reaches a healthy adult's twisting torque without turning, the
+# skill fails with not-a-screw-cap instead of twisting harder. The YAML form is
+# tests/fixtures/unscrew-cap.yaml, which passes the authoring validator.
+
+skill unscrew-cap 1.1.0 {
+  id      0192f3a5-1b20-7d55-9c2f-3e8a0f7b5d02   # global ID (UUID v7), same for all versions
+  title   "Unscrew a cap from a bottle or jar"
+  class   RS 2.1.2                               # Changing quantity > Divide > Detach a part
+  tags    object:bottle object:jar object:screw-cap body:two-hands domain:kitchen
+
+  needs    ArmMotion x2, GripperMotion x2, Grasping, ForceSensing, Camera
+  profile  rs-rh >=1.0 <2.0
+  failures not-a-screw-cap, regrasp
+
+  objects {
+    bottle : Bottle { has body : Surface, cap : ScrewCap }
+  }
+
+  pre     capped(bottle), upright(bottle), reachable(bottle)
+  effect  not capped(bottle)
+  success not capped(bottle) and upright(bottle) within 20 s
+  abort   not upright(bottle)
+
+  plan sequence {
+    hold bottle.body with left   force <= rh.grip.reasonable
+    hold bottle.cap  with right  force <= rh.grip.reasonable
+    rotate bottle.cap about bottle by -720 deg  with right
+        expect torque ~ 1.0 Nm                    # typical 28 mm drink cap
+        torque <= rh.twist(d: 28 mm).reasonable   # about 2.8 Nm
+        on limit: fail not-a-screw-cap
+        on slip:  fail regrasp
+    check not capped(bottle)
+  }
+
+  provenance {
+    author  "A. Contributor"  key ed25519:...
+    created 2026-11-25
+    modified 2026-11-25
+    origin  written
+    licence CC-BY-4.0
+  }
+}

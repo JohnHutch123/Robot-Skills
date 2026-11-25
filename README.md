@@ -59,11 +59,13 @@ The full example is in [`examples/skills/`](examples/skills/).
 | [`docs/prior-art.md`](docs/prior-art.md) | Survey of existing systems and storage options, and why RS is designed this way |
 | [`examples/skills/`](examples/skills/) | Example skills in RS text and YAML form |
 | [`examples/robots/`](examples/robots/) | Example robot capability profiles |
+| [`profiles/`](profiles/) | Reference profiles skills cite, starting with the [Reasonable Human](profiles/rs-rh.yaml) force and torque values |
 | [`docs/library-database.md`](docs/library-database.md) | Design of the open skill library: global IDs, fast lookup, ratings, usage and comments |
 | [`library/`](library/) | SQL schema, example queries and sample data for the library (PostgreSQL) |
 | [`src/robot_skills/`](src/robot_skills/) | Python authoring validator, CLI and packaged JSON Schema |
 | [`docs/validator.md`](docs/validator.md) | Installation, supported profile, read/write API and future Delphi/C boundary |
-| [`tests/`](tests/) | Validator regression tests and a synthetic valid source fixture |
+| [`docs/reasonable-human.md`](docs/reasonable-human.md) | Findings behind the Reasonable Human profile: existing standards and strength data |
+| [`tests/`](tests/) | Validator regression tests and synthetic valid source fixtures |
 
 ## Key design choices (v0.1)
 

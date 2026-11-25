@@ -428,5 +428,111 @@ class CliTests(unittest.TestCase):
         self.assertIn("/provenance/author/key", process.stdout)
 
 
+UNSCREW = ROOT / "tests" / "fixtures" / "unscrew-cap.yaml"
+CHOOSER = ROOT / "tests" / "fixtures" / "open-container.yaml"
+RH_FILE = ROOT / "profiles" / "rs-rh.yaml"
+
+
+class ReasonableHumanTests(unittest.TestCase):
+    def setUp(self):
+        self.document = read_document(UNSCREW.read_text(encoding="utf-8"))
+        self.twist = self.document["plan"]["sequence"][2]["rotate"]
+
+    def assertError(self, code, document=None):
+        result = validate_document(self.document if document is None else document)
+        self.assertFalse(result.valid, result.to_dict())
+        self.assertTrue(any(item.code == code for item in result.diagnostics), result.to_dict())
+
+    def test_fixtures_are_valid(self):
+        self.assertEqual(validate_file(UNSCREW).diagnostics, ())
+        result = validate_file(CHOOSER)
+        self.assertTrue(result.valid, result.to_dict())
+        self.assertEqual({item.code for item in result.diagnostics}, {"dependency.unresolved"})
+
+    def test_validator_table_matches_profile_file(self):
+        from robot_skills import validator
+        profile = read_document(RH_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(profile["profile"], validator.RH_PROFILE)
+        self.assertEqual(set(profile["actions"]), set(validator.RH_ACTIONS))
+        for name, entry in profile["actions"].items():
+            kind, weak, reasonable = validator.RH_ACTIONS[name]
+            unit = {"force": "N", "torque": "Nm"}[kind]
+            self.assertEqual(entry["quantity"], kind)
+            self.assertEqual(entry["weak"], f"{weak} {unit}")
+            self.assertEqual(entry["reasonable"], f"{reasonable} {unit}")
+        twist = profile["actions"]["twist"]
+        self.assertEqual(twist["reference_diameter"], f"{validator.RH_REFERENCE_DIAMETER_MM} mm")
+        self.assertEqual(twist["diameter_range"], [f"{value} mm" for value in validator.RH_DIAMETER_RANGE_MM])
+
+    def test_profile_must_be_listed_and_known(self):
+        del self.document["profiles"]
+        self.assertError("profile.missing")
+        self.setUp()
+        self.document["profiles"][0]["name"] = "rs-child"
+        self.assertError("profile.unknown")
+        self.setUp()
+        self.document["profiles"][0]["version"] = "^1.0"
+        self.assertError("dependency.range")
+
+    def test_profile_reference_shapes(self):
+        for cap, code in (
+            ("<= rh.wrench(d: 28 mm).reasonable", "profile.action"),
+            ("<= rh.twist(d: 28 mm).strong", "profile.level"),
+            ("<= rh.grip.reasonable", "profile.quantity"),
+            ("<= rh.twist.reasonable", "profile.diameter"),
+            ("<= rh.twist(d: 5 mm).reasonable", "profile.diameter"),
+            ("<= rh.twist(d: 0.2 m).reasonable", "profile.diameter"),
+            ("<= rh.twist(d: 28 Nm).reasonable", "quantity.unit"),
+            ("rh.twist(d: 28 mm).reasonable", "quantity.unit"),
+        ):
+            with self.subTest(cap=cap):
+                self.setUp()
+                self.twist["torque"] = cap
+                self.assertError(code)
+        self.setUp()
+        self.document["plan"]["sequence"][0]["hold"]["force"] = "<= rh.grip(d: 28 mm).reasonable"
+        self.assertError("profile.diameter")
+
+    def test_metres_and_numeric_caps_are_accepted(self):
+        for cap in ("<= rh.twist(d: 0.028 m).weak", "<= 2.5 Nm"):
+            with self.subTest(cap=cap):
+                self.twist["torque"] = cap
+                self.assertTrue(validate_document(self.document).valid)
+
+    def test_expect_must_fit_under_the_cap(self):
+        # 6.5 Nm * 28 / 66 is about 2.76 Nm.
+        self.twist["expect"] = "torque ~ 2.7 Nm"
+        self.assertTrue(validate_document(self.document).valid)
+        self.twist["expect"] = "torque ~ 2.8 Nm"
+        self.assertError("limit.expect")
+        self.setUp()
+        self.twist["torque"] = "<= 0.5 Nm"
+        self.assertError("limit.expect")
+        for text in ("torque ~ 1 N", "torque 1 Nm", "torque ~ 0 Nm"):
+            with self.subTest(expect=text):
+                self.setUp()
+                self.twist["expect"] = text
+                self.assertFalse(validate_document(self.document).valid)
+
+    def test_failure_reasons_are_declared_and_need_a_cap(self):
+        self.document["failures"] = ["regrasp"]
+        self.assertError("failure.undeclared")
+        self.setUp()
+        del self.twist["torque"]
+        self.assertError("failure.limit")
+        self.setUp()
+        self.twist["fail_on"] = {"stall": "not-a-screw-cap"}
+        self.assertError("schema.additionalProperties")
+
+    def test_on_fail_handlers_are_checked(self):
+        chooser = read_document(CHOOSER.read_text(encoding="utf-8"))
+        use = chooser["plan"]["sequence"][1]["select"]["branches"][1]["do"]["use"]
+        use["on_fail"].append(copy.deepcopy(use["on_fail"][0]))
+        self.assertError("failure.duplicate", chooser)
+        use["on_fail"].pop()
+        use["on_fail"][0]["do"] = {"check": "open(lid)"}
+        self.assertError("reference.object", chooser)
+
+
 if __name__ == "__main__":
     unittest.main()
